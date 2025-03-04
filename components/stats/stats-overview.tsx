@@ -15,7 +15,7 @@ export function StatsOverview() {
     bestStreak,
     dailyMotivation,
     focusTips,
-    updateDailyMotivation,
+    // updateDailyMotivation,
   } = useStudy()
 
   return (
@@ -64,7 +64,7 @@ export function StatsOverview() {
               <Edit2 className="h-3 w-3" />
             </Button>
           </div>
-          <div className="text-sm italic pl-4">"{dailyMotivation}"</div>
+          <div className="text-sm italic pl-4">{dailyMotivation}</div>
         </div>
 
         <div>

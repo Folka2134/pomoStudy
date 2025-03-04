@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 
 export function Timer() {
   const {
-    timerState,
+    // timerState,
     startTimer,
     pauseTimer,
     resetTimer,
@@ -71,7 +71,7 @@ export function Timer() {
           {isRunning ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
         </Button>
 
-        <Button variant="outline" size="icon" onClick={() => {}} className="rounded-full h-12 w-12">
+        <Button variant="outline" size="icon" onClick={() => { }} className="rounded-full h-12 w-12">
           <ListTodo className="h-5 w-5" />
         </Button>
       </div>
