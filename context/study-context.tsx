@@ -61,23 +61,45 @@ interface StudyContextType {
 const StudyContext = createContext<StudyContextType | undefined>(undefined)
 
 export function StudyProvider({ children }: { children: React.ReactNode }) {
+  const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(key)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch (error) {
+          console.error(`Error parsing localStorage for ${key}:`, error)
+        }
+      }
+    }
+    return defaultValue
+  }
+
+  const saveToLocalStorage = (key: string, value: any) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(key, JSON.stringify(value))
+      } catch (error) {
+        console.error(`Error saving to localStorage for ${key}:`, error)
+      }
+    }
+  }
+
   // Timer state
-  const [timerState, setTimerState] = useState<"idle" | "running" | "paused" | "completed">("idle")
-  const [isBreak, setIsBreak] = useState(false)
-  const [elapsedTime, setElapsedTime] = useState(0)
-  const [focusTime, setFocusTime] = useState(25)
-  const [breakTime, setBreakTime] = useState(5)
-  const [targetSessions, setTargetSessions] = useState(4)
-  const [sessionsCompleted, setSessionsCompleted] = useState(2)
-  const [timerTechnique, setTimerTechnique] = useState("pomodoro")
+  const [timerState, setTimerState] = useState<"idle" | "running" | "paused" | "completed">(
+    loadFromLocalStorage('timerState', "idle")
+  )
+  const [isBreak, setIsBreak] = useState(loadFromLocalStorage('isBreak', false))
+  const [elapsedTime, setElapsedTime] = useState(loadFromLocalStorage('elapsedTime', 0))
+  const [focusTime, setFocusTime] = useState(loadFromLocalStorage('focusTime', 25))
+  const [breakTime, setBreakTime] = useState(loadFromLocalStorage('breakTime', 5))
+  const [targetSessions, setTargetSessions] = useState(loadFromLocalStorage('targetSessions', 4))
+  const [sessionsCompleted, setSessionsCompleted] = useState(loadFromLocalStorage('sessionsCompleted', 2))
+  const [timerTechnique, setTimerTechnique] = useState(loadFromLocalStorage('timerTechnique', "pomodoro"))
 
   // Tasks
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: "1", text: "Complete math homework", completed: false, priority: 4 },
-    { id: "2", text: "Read chapter 5", completed: false, priority: 3 },
-    { id: "3", text: "Prepare for presentation", completed: true, priority: 5 },
-    { id: "4", text: "Review notes", completed: false, priority: 2 },
-  ])
+  const [tasks, setTasks] = useState<Task[]>(loadFromLocalStorage("tasks", [
+  ]))
 
   // Stats
   const [streak, setStreak] = useState(20)
@@ -216,6 +238,62 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
 
   // Activity
   const [activityData, setActivityData] = useState<ActivityDay[]>(generateActivityData())
+
+  // Use effects to save to localStorage when state changes
+  useEffect(() => {
+    saveToLocalStorage('timerState', timerState)
+  }, [timerState])
+
+  useEffect(() => {
+    saveToLocalStorage('isBreak', isBreak)
+  }, [isBreak])
+
+  useEffect(() => {
+    saveToLocalStorage('elapsedTime', elapsedTime)
+  }, [elapsedTime])
+
+  useEffect(() => {
+    saveToLocalStorage('tasks', tasks)
+  }, [tasks])
+
+  useEffect(() => {
+    saveToLocalStorage('focusTime', focusTime)
+    saveToLocalStorage('breakTime', breakTime)
+    saveToLocalStorage('targetSessions', targetSessions)
+    saveToLocalStorage('sessionsCompleted', sessionsCompleted)
+    saveToLocalStorage('timerTechnique', timerTechnique)
+  }, [focusTime, breakTime, targetSessions, sessionsCompleted, timerTechnique])
+  // Helper function to generate mock activity data
+  function generateActivityData(): ActivityDay[] {
+    const days = 365 // Full year of data
+    const result: ActivityDay[] = []
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date()
+      date.setDate(date.getDate() - (days - i))
+
+      // Generate random activity data
+      const intensity = Math.floor(Math.random() * 5) // 0-4
+      const minutes = intensity === 0 ? 0 : intensity * 30 + Math.floor(Math.random() * 30)
+
+      result.push({
+        date: date.toISOString().split("T")[0],
+        intensity,
+        minutes,
+      })
+    }
+
+    // Make sure recent days have some activity to match the streak
+    for (let i = 0; i < 20; i++) {
+      const index = result.length - 1 - i
+      if (index >= 0) {
+        result[index].intensity = Math.max(1, Math.floor(Math.random() * 5))
+        result[index].minutes = result[index].intensity * 30 + Math.floor(Math.random() * 30)
+      }
+    }
+
+    return result
+  }
 
   // Timer functions
   const startTimer = () => {
@@ -371,37 +449,5 @@ export function useStudy() {
     throw new Error("useStudy must be used within a StudyProvider")
   }
   return context
-}
-
-// Helper function to generate mock activity data
-function generateActivityData(): ActivityDay[] {
-  const days = 84 // 12 weeks
-  const result: ActivityDay[] = []
-
-  for (let i = 0; i < days; i++) {
-    const date = new Date()
-    date.setDate(date.getDate() - (days - i))
-
-    // Generate random activity data
-    const intensity = Math.floor(Math.random() * 5) // 0-4
-    const minutes = intensity === 0 ? 0 : intensity * 30 + Math.floor(Math.random() * 30)
-
-    result.push({
-      date: date.toISOString().split("T")[0],
-      intensity,
-      minutes,
-    })
-  }
-
-  // Make sure recent days have some activity to match the streak
-  for (let i = 0; i < 20; i++) {
-    const index = result.length - 1 - i
-    if (index >= 0) {
-      result[index].intensity = Math.max(1, Math.floor(Math.random() * 5))
-      result[index].minutes = result[index].intensity * 30 + Math.floor(Math.random() * 30)
-    }
-  }
-
-  return result
 }
 
