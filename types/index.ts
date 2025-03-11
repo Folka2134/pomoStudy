@@ -15,8 +15,8 @@ export interface Achievement {
   id: string;
   title: string;
   description: string;
-  type: "daily" | "streaks" | "progress"
   unlocked: boolean;
+  type: string;
   progress: number;
   target: number;
   icon: string;
