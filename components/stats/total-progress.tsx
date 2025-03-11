@@ -1,13 +1,14 @@
 "use client"
 
-import { useStudy } from "@/context/study-context"
+import { useStats } from "@/context/StatsContext"
 import { Activity, Clock } from "lucide-react"
 
 export function TotalProgress() {
-  const { totalSessions, totalHours, totalMinutes, targetHours } = useStudy()
+  const stats = useStats()
 
-  const formattedTime = `${totalHours}h${totalMinutes > 0 ? `${totalMinutes}m` : ""}`
-  const progressPercentage = (totalHours / targetHours) * 100
+
+  const formattedTime = `${stats.totalHours}h${stats.totalMinutes > 0 ? `${stats.totalMinutes}m` : ""}`
+  const progressPercentage = (stats.totalHours / stats.targetHours) * 100
 
   return (
     <div className="rounded-lg border border-border bg-card p-6">
@@ -22,7 +23,7 @@ export function TotalProgress() {
             <span className="h-2 w-2 rounded-full bg-primary mr-2"></span>
             <span className="text-sm text-muted-foreground">SESSIONS</span>
           </div>
-          <div className="text-3xl font-bold text-purple-500">{totalSessions}</div>
+          <div className="text-3xl font-bold text-purple-500">{stats.totalSessions}</div>
         </div>
 
         <div>
@@ -40,7 +41,7 @@ export function TotalProgress() {
             <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
             <span className="text-sm font-medium">TARGET HOURS</span>
           </div>
-          <div className="text-sm font-medium">{targetHours}hr</div>
+          <div className="text-sm font-medium">{stats.targetHours}hr</div>
         </div>
 
         <div className="h-3 bg-secondary rounded-full overflow-hidden">

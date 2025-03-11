@@ -5,11 +5,13 @@ import { Flame, Clock } from "lucide-react"
 import { TaskList } from "@/components/tasks/task-list"
 import { TimerSettings } from "@/components/timer/timer-settings"
 import { cn } from "@/lib/utils"
-import { useStudy } from "@/context/study-context"
+import { useStats } from "@/context/StatsContext"
+import { useActivity } from "@/context/ActivityContext"
 
 export function Sidebar() {
   const [activeTab, setActiveTab] = useState<"tasks" | "settings">("tasks")
-  const { streak, sessionsToday, focusedTimeToday } = useStudy()
+  const stats = useStats()
+  const activity = useActivity()
 
   return (
     <div className="w-80 border-r border-border flex flex-col h-[calc(100vh-3.5rem)]">
@@ -17,17 +19,17 @@ export function Sidebar() {
         <div className="bg-card rounded-lg p-4 shadow-sm">
           <div className="flex items-center space-x-2 text-accent mb-2">
             <Flame className="h-5 w-5" />
-            <span className="font-bold">{streak} day streak</span>
+            <span className="font-bold">{stats.streak} day streak</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="flex items-center space-x-2">
               <div className="h-2 w-2 rounded-full bg-primary" />
-              <span>{sessionsToday} sessions</span>
+              <span>{stats.sessionsToday} sessions</span>
             </div>
             <div className="flex items-center space-x-2">
               <Clock className="h-4 w-4 text-blue-400" />
-              <span>{formatTime(focusedTimeToday)} focused</span>
+              <span>{formatTime(stats.focusedTimeToday)} focused</span>
             </div>
           </div>
         </div>

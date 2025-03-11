@@ -1,8 +1,8 @@
 "use client"
 
-import { useStudy } from "@/context/study-context"
 import { Calendar } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useActivity } from "@/context/ActivityContext"
 
 const DAYS_IN_WEEK = 7
 const WEEKS_TO_SHOW = 53 // Show about a year of data
@@ -14,10 +14,10 @@ export interface ActivityDay {
 }
 
 export function ActivityHistory() {
-  const { activityData } = useStudy()
+  const activity = useActivity()
 
   // Ensure we have data for the last 371 days (53 weeks * 7 days)
-  const filledActivityData = fillMissingDays(activityData, WEEKS_TO_SHOW * DAYS_IN_WEEK)
+  const filledActivityData = fillMissingDays(activity.activityData, WEEKS_TO_SHOW * DAYS_IN_WEEK)
 
   // Group activity data by week
   const weeks = []

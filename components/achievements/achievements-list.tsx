@@ -7,14 +7,14 @@ import { Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { AchievementCard } from "@/components/achievements/achievement-card"
-import { useStudy } from "@/context/study-context"
+import { useAchievements } from "@/context/AchievementContext"
 
 export function AchievementsList() {
-  const { achievements } = useStudy()
+  const achievements = useAchievements()
   const [filter, setFilter] = useState<"all" | "daily" | "streaks" | "progress">("all")
   const [searchQuery, setSearchQuery] = useState("")
 
-  const filteredAchievements = achievements.filter((achievement) => {
+  const filteredAchievements = achievements.allAchievements.filter((achievement) => {
     if (filter !== "all" && achievement.type !== filter) {
       return false
     }
