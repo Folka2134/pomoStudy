@@ -59,10 +59,39 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
   const [nextLevel, setNextLevel] = useState(loadFromLocalStorage('nextLevel', "Diamond"));
   const [hoursToNextLevel, setHoursToNextLevel] = useState(loadFromLocalStorage('hoursToNextLevel', 43));
 
-  // Last login date for daily reset checks
+  // Last login date for daily reset
   const [lastLoginDate, setLastLoginDate] = useState(
     loadFromLocalStorage('lastLoginDate', getTodayString())
   );
+
+  // Check for daily reset
+  useEffect(() => {
+    // Check date on component mount
+    checkForDailyReset();
+    
+    // Set up an interval to check the date every minute
+    const intervalId = setInterval(() => {
+      checkForDailyReset();
+    }, 60000); // Check every minute
+    
+    // Clean up the interval on unmount
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const checkForDailyReset = () => {
+    const today = getTodayString();
+    
+    if (lastLoginDate !== today) {
+      setSessionsToday(0);
+      saveToLocalStorage('sessionsToday', 0);
+      
+      setFocusedTimeToday(0);
+      saveToLocalStorage('focusedTimeToday', 0);
+      
+      setLastLoginDate(today);
+      saveToLocalStorage('lastLoginDate', today);
+    }
+  };
 
   // Level management functions
   const updateLevel = (newLevel: Level) => {
@@ -146,19 +175,6 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
       setHoursToNextLevel(10);
     }
   };
-
-  // Check for daily reset needs
-  useEffect(() => {
-    const today = getTodayString();
-
-    if (lastLoginDate !== today) {
-      // It's a new day - reset daily metrics
-      setSessionsToday(0);
-      setFocusedTimeToday(0);
-      setLastLoginDate(today);
-      saveToLocalStorage('lastLoginDate', today);
-    }
-  }, [lastLoginDate]);
 
   // Subscribe to timer session completions
   useEffect(() => {
@@ -257,7 +273,7 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
 
     // Cleanup subscription on unmount
     return unsubscribe;
-  }, [timer, hoursToNextLevel]); // Minimal dependencies
+  }, [timer]); // Minimal dependencies
 
   // Save state changes to localStorage
   useEffect(() => { saveToLocalStorage('streak', streak); }, [streak]);
