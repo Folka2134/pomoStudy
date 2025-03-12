@@ -1,12 +1,20 @@
-// contexts/StatsContext.tsx
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useState, useContext, useReducer, useEffect } from "react";
 import { loadFromLocalStorage, saveToLocalStorage, getTodayString } from "./utils/localStorageUtils";
 import { useTimer } from "./TimerContext";
 import { Level } from "@/types";
 
-interface StatsContextType {
+// Constants
+const LEVEL_NAMES = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"];
+const DEFAULT_FOCUS_TIPS = [
+  "Take a 2-minute break every 25 minutes to maintain peak focus",
+  "Stay hydrated and keep a water bottle at your desk",
+];
+const DEFAULT_MOTIVATION = "Focus on the process, not just the outcome";
+
+// Types
+interface StatsState {
   streak: number;
   bestStreak: number;
   sessionsToday: number;
@@ -15,298 +23,330 @@ interface StatsContextType {
   totalHours: number;
   totalMinutes: number;
   targetHours: number;
-  level: Level;
-  levelProgress: number;
-  nextLevel: string;
-  hoursToNextLevel: number;
+  levelInfo: {
+    level: Level;
+    progress: number;
+    nextLevel: string;
+    hoursToNextLevel: number;
+  };
   dailyMotivation: string;
   focusTips: string[];
+  lastLoginDate: string;
+}
 
+interface StatsContextType extends StatsState {
   updateDailyMotivation: (text: string) => void;
   updateLevel: (newLevel: Level) => void;
   updateLevelProgress: (progress: number) => void;
   resetProgress: () => void;
-
-  // For integration with achievements
   incrementStreak: () => void;
   resetStreak: () => void;
+  isDayChange: boolean;
 }
+
+// Action types
+type StatsAction =
+  | { type: 'INCREMENT_STREAK' }
+  | { type: 'RESET_STREAK' }
+  | { type: 'UPDATE_DAILY_MOTIVATION', payload: string }
+  | { type: 'UPDATE_LEVEL', payload: Level }
+  | { type: 'UPDATE_LEVEL_PROGRESS', payload: number }
+  | { type: 'COMPLETE_SESSION', payload: number }
+  | { type: 'RESET_DAILY_STATS' }
+  | { type: 'RESET_ALL_PROGRESS' };
+
+// Initial state loader
+const loadInitialState = (): StatsState => {
+  return {
+    streak: loadFromLocalStorage('streak', 0),
+    bestStreak: loadFromLocalStorage('bestStreak', 0),
+    sessionsToday: loadFromLocalStorage('sessionsToday', 0),
+    focusedTimeToday: loadFromLocalStorage('focusedTimeToday', 0),
+    totalSessions: loadFromLocalStorage('totalSessions', 0),
+    totalHours: loadFromLocalStorage('totalHours', 0),
+    totalMinutes: loadFromLocalStorage('totalMinutes', 0),
+    targetHours: loadFromLocalStorage('targetHours', 0),
+    levelInfo: {
+      level: loadFromLocalStorage('level', { name: "Bronze", number: 1 }),
+      progress: loadFromLocalStorage('levelProgress', 0),
+      nextLevel: loadFromLocalStorage('nextLevel', "Silver"),
+      hoursToNextLevel: loadFromLocalStorage('hoursToNextLevel', 10),
+    },
+    dailyMotivation: loadFromLocalStorage('dailyMotivation', DEFAULT_MOTIVATION),
+    focusTips: loadFromLocalStorage('focusTips', DEFAULT_FOCUS_TIPS),
+    lastLoginDate: loadFromLocalStorage('lastLoginDate', getTodayString()),
+  };
+};
+
+// Helper functions
+const calculateLevelUp = (currentLevel: Level) => {
+  const newLevelNumber = currentLevel.number + 1;
+  const newLevelName = LEVEL_NAMES[newLevelNumber] || "Legendary";
+  const nextLevelName = LEVEL_NAMES[newLevelNumber + 1] || "Legendary+";
+  const newHoursToNextLevel = 10 * (newLevelNumber + 1);
+
+  return {
+    level: { name: newLevelName, number: newLevelNumber },
+    nextLevel: nextLevelName,
+    hoursToNextLevel: newHoursToNextLevel,
+    progress: 0,
+  };
+};
+
+// Reducer function
+const statsReducer = (state: StatsState, action: StatsAction): StatsState => {
+  switch (action.type) {
+    case 'INCREMENT_STREAK': {
+      const newStreak = state.streak + 1;
+      const newBestStreak = Math.max(newStreak, state.bestStreak);
+      return {
+        ...state,
+        streak: newStreak,
+        bestStreak: newBestStreak,
+      };
+    }
+
+    case 'RESET_STREAK':
+      return {
+        ...state,
+        streak: 0,
+      };
+
+    case 'UPDATE_DAILY_MOTIVATION':
+      return {
+        ...state,
+        dailyMotivation: action.payload,
+      };
+
+    case 'UPDATE_LEVEL':
+      return {
+        ...state,
+        levelInfo: {
+          ...state.levelInfo,
+          level: action.payload,
+        },
+      };
+
+    case 'UPDATE_LEVEL_PROGRESS': {
+      const newProgress = action.payload;
+      
+      // Check if level up is needed
+      if (newProgress >= 100) {
+        const newLevelInfo = calculateLevelUp(state.levelInfo.level);
+        return {
+          ...state,
+          levelInfo: newLevelInfo,
+        };
+      }
+      
+      return {
+        ...state,
+        levelInfo: {
+          ...state.levelInfo,
+          progress: newProgress,
+        },
+      };
+    }
+
+    case 'COMPLETE_SESSION': {
+      const minutesAdded = action.payload;
+      const newSessionsToday = state.sessionsToday + 1;
+      const newFocusedTimeToday = state.focusedTimeToday + minutesAdded;
+      const newTotalSessions = state.totalSessions + 1;
+      
+      // Calculate new total hours and minutes
+      const totalMinutesTemp = state.totalMinutes + minutesAdded;
+      const additionalHours = Math.floor(totalMinutesTemp / 60);
+      const newTotalMinutes = totalMinutesTemp % 60;
+      const newTotalHours = state.totalHours + additionalHours;
+      
+      // Calculate level progress
+      const progressIncrement = (minutesAdded / 60) / state.levelInfo.hoursToNextLevel * 100;
+      const newProgress = Math.min(state.levelInfo.progress + progressIncrement, 100);
+      
+      // Check if level up is needed
+      if (newProgress >= 100) {
+        const newLevelInfo = calculateLevelUp(state.levelInfo.level);
+        return {
+          ...state,
+          sessionsToday: newSessionsToday,
+          focusedTimeToday: newFocusedTimeToday,
+          totalSessions: newTotalSessions,
+          totalHours: newTotalHours,
+          totalMinutes: newTotalMinutes,
+          levelInfo: newLevelInfo,
+        };
+      }
+      
+      return {
+        ...state,
+        sessionsToday: newSessionsToday,
+        focusedTimeToday: newFocusedTimeToday,
+        totalSessions: newTotalSessions,
+        totalHours: newTotalHours,
+        totalMinutes: newTotalMinutes,
+        levelInfo: {
+          ...state.levelInfo,
+          progress: newProgress,
+        },
+      };
+    }
+
+    case 'RESET_DAILY_STATS':
+      return {
+        ...state,
+        sessionsToday: 0,
+        focusedTimeToday: 0,
+        lastLoginDate: getTodayString(),
+      };
+
+    case 'RESET_ALL_PROGRESS':
+      return {
+        ...state,
+        streak: 0,
+        bestStreak: 0,
+        sessionsToday: 0,
+        focusedTimeToday: 0,
+        totalSessions: 0,
+        totalHours: 0,
+        totalMinutes: 0,
+        levelInfo: {
+          level: { name: "Bronze", number: 1 },
+          progress: 0,
+          nextLevel: "Silver",
+          hoursToNextLevel: 10,
+        },
+      };
+
+    default:
+      return state;
+  }
+};
 
 const StatsContext = createContext<StatsContextType | undefined>(undefined);
 
 export function StatsProvider({ children }: { children: React.ReactNode }) {
-  // Get timer to subscribe to session completions
   const timer = useTimer();
-
-  // Stats
-  const [streak, setStreak] = useState(loadFromLocalStorage('streak', 0));
-  const [bestStreak, setBestStreak] = useState(loadFromLocalStorage('bestStreak', 0));
-  const [sessionsToday, setSessionsToday] = useState(loadFromLocalStorage('sessionsToday', 0));
-  const [focusedTimeToday, setFocusedTimeToday] = useState(loadFromLocalStorage('focusedTimeToday', 0));
-  const [totalSessions, setTotalSessions] = useState(loadFromLocalStorage('totalSessions', 0));
-  const [totalHours, setTotalHours] = useState(loadFromLocalStorage('totalHours', 0));
-  const [totalMinutes, setTotalMinutes] = useState(loadFromLocalStorage('totalMinutes', 0));
-  const [targetHours, setTargetHours] = useState(loadFromLocalStorage('targetHours', 0));
-  const [dailyMotivation, setDailyMotivation] = useState(loadFromLocalStorage('dailyMotivation', "Focus on the process, not just the outcome"));
-  const [focusTips, setFocusTips] = useState(loadFromLocalStorage('focusTips', [
-    "Take a 2-minute break every 25 minutes to maintain peak focus",
-    "Stay hydrated and keep a water bottle at your desk",
-  ]));
-
-  // Level
-  const [level, setLevel] = useState(loadFromLocalStorage('level', { name: "Platinum", number: 6 }));
-  const [levelProgress, setLevelProgress] = useState(loadFromLocalStorage('levelProgress', 57.2));
-  const [nextLevel, setNextLevel] = useState(loadFromLocalStorage('nextLevel', "Diamond"));
-  const [hoursToNextLevel, setHoursToNextLevel] = useState(loadFromLocalStorage('hoursToNextLevel', 43));
-
-  // Last login date for daily reset
-  const [lastLoginDate, setLastLoginDate] = useState(
-    loadFromLocalStorage('lastLoginDate', getTodayString())
-  );
+  const [state, dispatch] = useReducer(statsReducer, null, loadInitialState);
+  const [isDayChange, setIsDayChange] = useState(false)
 
   // Check for daily reset
   useEffect(() => {
-    // Check date on component mount
+    const checkForDailyReset = () => {
+      const today = getTodayString();
+      if (state.lastLoginDate !== today) {
+        dispatch({ type: 'RESET_DAILY_STATS' });
+        setIsDayChange(true)
+
+        setTimeout(() => {
+          setIsDayChange(false)
+        }, 1000);
+      }
+    };
+
+    // Check on mount
     checkForDailyReset();
     
-    // Set up an interval to check the date every minute
-    const intervalId = setInterval(() => {
-      checkForDailyReset();
-    }, 60000); // Check every minute
+    // Check when window gains focus
+    const handleFocus = () => checkForDailyReset();
+    window.addEventListener('focus', handleFocus);
     
-    // Clean up the interval on unmount
-    return () => clearInterval(intervalId);
-  }, []);
-
-  const checkForDailyReset = () => {
-    const today = getTodayString();
+    // Check once per hour
+    const intervalId = setInterval(checkForDailyReset, 3600000);
     
-    if (lastLoginDate !== today) {
-      setSessionsToday(0);
-      saveToLocalStorage('sessionsToday', 0);
-      
-      setFocusedTimeToday(0);
-      saveToLocalStorage('focusedTimeToday', 0);
-      
-      setLastLoginDate(today);
-      saveToLocalStorage('lastLoginDate', today);
-    }
-  };
-
-  // Level management functions
-  const updateLevel = (newLevel: Level) => {
-    setLevel(newLevel);
-    saveToLocalStorage('level', newLevel);
-  };
-
-  const updateLevelProgress = (progress: number) => {
-    setLevelProgress(progress);
-    saveToLocalStorage('levelProgress', progress);
-
-    // Check if level up needed
-    if (progress >= 100) {
-      // Level up logic
-      const newLevelNumber = level.number + 1;
-
-      // Define level names as needed
-      const levelNames = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"];
-      const newLevelName = levelNames[newLevelNumber] || "Legendary";
-
-      updateLevel({ name: newLevelName, number: newLevelNumber });
-      setLevelProgress(0);
-      saveToLocalStorage('levelProgress', 0);
-
-      // Update next level
-      const nextLevelName = levelNames[newLevelNumber + 1] || "Legendary+";
-      setNextLevel(nextLevelName);
-      saveToLocalStorage('nextLevel', nextLevelName);
-    }
-  };
-
-  const updateDailyMotivation = (text: string) => {
-    setDailyMotivation(text);
-    saveToLocalStorage('dailyMotivation', text);
-  };
-
-  // Streak management
-  const incrementStreak = () => {
-    const newStreak = streak + 1;
-    setStreak(newStreak);
-    saveToLocalStorage('streak', newStreak);
-
-    // Update best streak if needed
-    if (newStreak > bestStreak) {
-      setBestStreak(newStreak);
-      saveToLocalStorage('bestStreak', newStreak);
-    }
-  };
-
-  const resetStreak = () => {
-    setStreak(0);
-    saveToLocalStorage('streak', 0);
-  };
-
-  // Function to reset all progress (for testing or user request)
-  const resetProgress = () => {
-    if (typeof window !== 'undefined') {
-      // Clear specific localStorage items instead of all localStorage
-      const keysToKeep = ['focusTime', 'breakTime', 'timerTechnique']; // Settings to preserve
-
-      // Get keys to remove
-      const keysToRemove = Object.keys(localStorage)
-        .filter(key => !keysToKeep.includes(key));
-
-      // Remove keys
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-
-      // Reset state to defaults
-      setStreak(0);
-      setBestStreak(0);
-      setSessionsToday(0);
-      setFocusedTimeToday(0);
-      setTotalSessions(0);
-      setTotalHours(0);
-      setTotalMinutes(0);
-
-      // Reset level
-      setLevel({ name: "Bronze", number: 1 });
-      setLevelProgress(0);
-      setNextLevel("Silver");
-      setHoursToNextLevel(10);
-    }
-  };
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(intervalId);
+    };
+  }, [state.lastLoginDate]);
 
   // Subscribe to timer session completions
   useEffect(() => {
     const handleSessionComplete = () => {
-      // Use function form to access current state
-      setSessionsToday(prev => {
-        const newValue = prev + 1;
-        console.log("Previous sessions: " + prev)
-        console.log("New sessions: " + newValue)
-        saveToLocalStorage('sessionsToday', newValue);
-        return newValue;
-      });
-
-      setTotalSessions(prev => {
-        const newValue = prev + 1;
-        saveToLocalStorage('totalSessions', newValue);
-        return newValue;
-      });
-
-      // Update focused time
-      const minutesAdded = timer.focusTime;
-
-      setFocusedTimeToday(prev => {
-        const newValue = prev + minutesAdded;
-        saveToLocalStorage('focusedTimeToday', newValue);
-        return newValue;
-      });
-
-      // Update total time - use function form for all
-      setTotalMinutes(prevMinutes => {
-        const newMinutes = prevMinutes + minutesAdded;
-
-        // If we have 60+ minutes, update hours too
-        if (newMinutes >= 60) {
-          setTotalHours(prevHours => {
-            const hoursToAdd = Math.floor(newMinutes / 60);
-            const newHours = prevHours + hoursToAdd;
-            saveToLocalStorage('totalHours', newHours);
-            return newHours;
-          });
-
-          const remainingMinutes = newMinutes % 60;
-          saveToLocalStorage('totalMinutes', remainingMinutes);
-          return remainingMinutes;
-        } else {
-          saveToLocalStorage('totalMinutes', newMinutes);
-          return newMinutes;
-        }
-      });
-
-      // Update level progress with function form too
-      setLevelProgress(prevProgress => {
-        const progressIncrement = (minutesAdded / 60) / hoursToNextLevel * 100;
-        const newProgress = Math.min(prevProgress + progressIncrement, 100);
-        saveToLocalStorage('levelProgress', newProgress);
-
-        // Check for level up
-        if (newProgress >= 100) {
-          handleLevelUp();
-        }
-
-        return newProgress;
-      });
-    };
-
-    // Separate function to handle level up
-    const handleLevelUp = () => {
-      // Get current level info
-      setLevel(prevLevel => {
-        const newLevelNumber = prevLevel.number + 1;
-        const levelNames = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"];
-        const newLevelName = levelNames[newLevelNumber] || "Legendary";
-        const newLevel = { name: newLevelName, number: newLevelNumber };
-
-        saveToLocalStorage('level', newLevel);
-
-        // Update next level
-        const nextLevelName = levelNames[newLevelNumber + 1] || "Legendary+";
-        setNextLevel(nextLevelName);
-        saveToLocalStorage('nextLevel', nextLevelName);
-
-        // Update hours needed
-        const newHoursToNextLevel = 10 * (newLevelNumber + 1);
-        setHoursToNextLevel(newHoursToNextLevel);
-        saveToLocalStorage('hoursToNextLevel', newHoursToNextLevel);
-
-        // Reset progress
-        setLevelProgress(0);
-        saveToLocalStorage('levelProgress', 0);
-
-        return newLevel;
-      });
+      dispatch({ type: 'COMPLETE_SESSION', payload: timer.focusTime });
     };
 
     const unsubscribe = timer.onSessionComplete(handleSessionComplete);
-
-    // Cleanup subscription on unmount
     return unsubscribe;
-  }, [timer]); // Minimal dependencies
+  }, [timer]);
 
-  // Save state changes to localStorage
-  useEffect(() => { saveToLocalStorage('streak', streak); }, [streak]);
-  useEffect(() => { saveToLocalStorage('bestStreak', bestStreak); }, [bestStreak]);
-  useEffect(() => { saveToLocalStorage('sessionsToday', sessionsToday); }, [sessionsToday]);
-  useEffect(() => { saveToLocalStorage('focusedTimeToday', focusedTimeToday); }, [focusedTimeToday]);
-  useEffect(() => { saveToLocalStorage('totalSessions', totalSessions); }, [totalSessions]);
-  useEffect(() => { saveToLocalStorage('totalHours', totalHours); }, [totalHours]);
-  useEffect(() => { saveToLocalStorage('totalMinutes', totalMinutes); }, [totalMinutes]);
-  useEffect(() => { saveToLocalStorage('level', level); }, [level]);
-  useEffect(() => { saveToLocalStorage('levelProgress', levelProgress); }, [levelProgress]);
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    // Save basic stats
+    saveToLocalStorage('streak', state.streak);
+    saveToLocalStorage('bestStreak', state.bestStreak);
+    saveToLocalStorage('sessionsToday', state.sessionsToday);
+    saveToLocalStorage('focusedTimeToday', state.focusedTimeToday);
+    saveToLocalStorage('totalSessions', state.totalSessions);
+    saveToLocalStorage('totalHours', state.totalHours);
+    saveToLocalStorage('totalMinutes', state.totalMinutes);
+    saveToLocalStorage('lastLoginDate', state.lastLoginDate);
+    
+    // Save level info
+    saveToLocalStorage('level', state.levelInfo.level);
+    saveToLocalStorage('levelProgress', state.levelInfo.progress);
+    saveToLocalStorage('nextLevel', state.levelInfo.nextLevel);
+    saveToLocalStorage('hoursToNextLevel', state.levelInfo.hoursToNextLevel);
+    
+    // Save customizable content
+    saveToLocalStorage('dailyMotivation', state.dailyMotivation);
+    saveToLocalStorage('focusTips', state.focusTips);
+  }, [state]);
 
-  const value = {
-    streak,
-    bestStreak,
-    sessionsToday,
-    focusedTimeToday,
-    totalSessions,
-    totalHours,
-    totalMinutes,
-    targetHours,
-    level,
-    levelProgress,
-    nextLevel,
-    hoursToNextLevel,
-    dailyMotivation,
-    focusTips,
+  // Public interface methods
+  const updateDailyMotivation = (text: string) => {
+    dispatch({ type: 'UPDATE_DAILY_MOTIVATION', payload: text });
+  };
+
+  const updateLevel = (newLevel: Level) => {
+    dispatch({ type: 'UPDATE_LEVEL', payload: newLevel });
+  };
+
+  const updateLevelProgress = (progress: number) => {
+    dispatch({ type: 'UPDATE_LEVEL_PROGRESS', payload: progress });
+  };
+
+  const resetProgress = () => {
+    if (typeof window !== 'undefined') {
+      // Clear specific localStorage items instead of all localStorage
+      const keysToKeep = ['focusTime', 'breakTime', 'timerTechnique']; // Settings to preserve
+      
+      // Get keys to remove
+      const keysToRemove = Object.keys(localStorage)
+        .filter(key => !keysToKeep.includes(key));
+      
+      // Remove keys
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      // Reset state
+      dispatch({ type: 'RESET_ALL_PROGRESS' });
+      console.log("Progress reset")
+    }
+  };
+
+  const incrementStreak = () => {
+    dispatch({ type: 'INCREMENT_STREAK' });
+  };
+
+  const resetStreak = () => {
+    dispatch({ type: 'RESET_STREAK' });
+  };
+
+  // Combine state and methods for context value
+  const value: StatsContextType = {
+    ...state,
     updateDailyMotivation,
     updateLevel,
     updateLevelProgress,
     resetProgress,
     incrementStreak,
-    resetStreak
+    resetStreak,
+    isDayChange,
+    // For interface compatibility with original code
+    level: state.levelInfo.level,
+    levelProgress: state.levelInfo.progress,
+    nextLevel: state.levelInfo.nextLevel,
+    hoursToNextLevel: state.levelInfo.hoursToNextLevel,
   };
 
   return <StatsContext.Provider value={value}>{children}</StatsContext.Provider>;
