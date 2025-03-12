@@ -40,10 +40,8 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
 
   // Check for daily streak maintenance
   useEffect(() => {
-    const today = getTodayString();
+    if (stats.isDayChange) {
 
-    if (lastLoginDate !== today) {
-      // It's a new day - check streak
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayString = yesterday.toISOString().split('T')[0];
@@ -58,12 +56,9 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
         // Reset streak
         stats.resetStreak();
       }
-
-      // Update last login date
-      setLastLoginDate(today);
-      saveToLocalStorage('lastLoginDate', today);
     }
-  }, [lastLoginDate, stats]);
+
+  }, [stats.isDayChange, stats]);
 
   // Subscribe to session completions to update activity data
   useEffect(() => {
