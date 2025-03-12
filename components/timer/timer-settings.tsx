@@ -4,9 +4,11 @@ import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTimer } from "@/context/TimerContext"
+import { useStats } from "@/context/StatsContext"
 
 export function TimerSettings() {
   const timer = useTimer()
+  const stats = useStats()
 
   return (
     <div className="p-4 space-y-6">
@@ -147,6 +149,15 @@ export function TimerSettings() {
               className="h-full bg-primary rounded-full"
               style={{ width: `${(timer.sessionsCompleted / timer.targetSessions) * 100}%` }}
             />
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <div className="flex justify-between text-sm mb-1">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => stats.resetProgress()}>Reset Data</Button>
           </div>
         </div>
       </div>
